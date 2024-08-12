@@ -15,8 +15,12 @@ class GraphLAM(BaseGraphModel):
     Oskarsson et al. (2023).
     """
 
-    def __init__(self, args):
-        super().__init__(args)
+    def __init__(self, hidden_dim, hidden_layers, mesh_aggr,lr, dataset, output_std, loss, step_length, n_example_pred,graph,processor_layers):
+        super().__init__(hidden_dim,hidden_layers,lr, dataset, output_std, loss, step_length, n_example_pred,graph)
+        # self.hidden_dim = hidden_dim
+        # self.hidden_layers=hidden_layers,
+        self.mesh_aggr = mesh_aggr
+        self.processor_layers = processor_layers
 
         assert (
             not self.hierarchical
@@ -40,12 +44,14 @@ class GraphLAM(BaseGraphModel):
         processor_nets = [
             InteractionNet(
                 self.m2m_edge_index,
-                args.hidden_dim,
-                hidden_layers=args.hidden_layers,
-                aggr=args.mesh_aggr,
+                hidden_dim,
+                hidden_layers=hidden_layers,
+                aggr=self.mesh_aggr,
             )
-            for _ in range(args.processor_layers)
+            for _ in range(self.processor_layers)
         ]
+
+        # print('stage1')
         self.processor = pyg.nn.Sequential(
             "mesh_rep, edge_rep",
             [
@@ -54,7 +60,9 @@ class GraphLAM(BaseGraphModel):
             ],
         )
 
+        # print('stage2')
     def get_num_mesh(self):
+        # print('get_num_mesh')
         """
         Compute number of mesh nodes from loaded features,
         and number of mesh nodes that should be ignored in encoding/decoding
@@ -62,6 +70,7 @@ class GraphLAM(BaseGraphModel):
         return self.mesh_static_features.shape[0], 0
 
     def embedd_mesh_nodes(self):
+        # print('embedd')
         """
         Embed static mesh features
         Returns tensor of shape (N_mesh, d_h)
@@ -77,6 +86,7 @@ class GraphLAM(BaseGraphModel):
         Returns mesh_rep: (B, N_mesh, d_h)
         """
         # Embed m2m here first
+        # print('process')
         batch_size = mesh_rep.shape[0]
         m2m_emb = self.m2m_embedder(self.m2m_features)  # (M_mesh, d_h)
         m2m_emb_expanded = self.expand_to_batch(

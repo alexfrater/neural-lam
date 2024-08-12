@@ -193,7 +193,7 @@ def main():
         "val",
         "test",
     ), f"Unknown eval setting: {args.eval}"
-
+    print('args',args)
     # Get an (actual) random run id as a unique identifier
     random_run_id = random.randint(0, 9999)
 

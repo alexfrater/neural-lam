@@ -13,13 +13,15 @@ class BaseGraphModel(ARModel):
     the encode-process-decode idea.
     """
 
-    def __init__(self, args):
-        super().__init__(args)
-
+    def __init__(self,hidden_dim,hidden_layers,lr, dataset, output_std, loss, step_length, n_example_pred,graph):
+        super().__init__(lr, dataset, output_std, loss, step_length, n_example_pred)
+        self.hidden_dim = hidden_dim
+        self.hidden_layers = hidden_layers
+        self.graph = graph
         # Load graph with static features
         # NOTE: (IMPORTANT!) mesh nodes MUST have the first
         # num_mesh_nodes indices,
-        self.hierarchical, graph_ldict = utils.load_graph(args.graph)
+        self.hierarchical, graph_ldict = utils.load_graph(self.graph)
         for name, attr_value in graph_ldict.items():
             # Make BufferLists module members and register tensors as buffers
             if isinstance(attr_value, torch.Tensor):
@@ -40,7 +42,7 @@ class BaseGraphModel(ARModel):
 
         # Define sub-models
         # Feature embedders for grid
-        self.mlp_blueprint_end = [args.hidden_dim] * (args.hidden_layers + 1)
+        self.mlp_blueprint_end = [self.hidden_dim] * (self.hidden_layers + 1)
         self.grid_embedder = utils.make_mlp(
             [self.grid_dim] + self.mlp_blueprint_end
         )
@@ -51,25 +53,25 @@ class BaseGraphModel(ARModel):
         # encoder
         self.g2m_gnn = InteractionNet(
             self.g2m_edge_index,
-            args.hidden_dim,
-            hidden_layers=args.hidden_layers,
+            self.hidden_dim,
+            hidden_layers=self.hidden_layers,
             update_edges=False,
         )
         self.encoding_grid_mlp = utils.make_mlp(
-            [args.hidden_dim] + self.mlp_blueprint_end
+            [self.hidden_dim] + self.mlp_blueprint_end
         )
 
         # decoder
         self.m2g_gnn = InteractionNet(
             self.m2g_edge_index,
-            args.hidden_dim,
-            hidden_layers=args.hidden_layers,
+            self.hidden_dim,
+            hidden_layers=self.hidden_layers,
             update_edges=False,
         )
 
         # Output mapping (hidden_dim -> output_dim)
         self.output_map = utils.make_mlp(
-            [args.hidden_dim] * (args.hidden_layers + 1)
+            [self.hidden_dim] * (self.hidden_layers + 1)
             + [self.grid_output_dim],
             layer_norm=False,
         )  # No layer norm on this one
@@ -101,6 +103,7 @@ class BaseGraphModel(ARModel):
     def predict_step(
         self, prev_state, prev_prev_state, batch_static_features, forcing
     ):
+        # print('predict_step')
         """
         Step state one step ahead using prediction model, X_{t-1}, X_t -> X_t+1
         prev_state: (B, num_grid_nodes, feature_dim), X_t

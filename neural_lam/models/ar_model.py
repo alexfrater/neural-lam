@@ -21,20 +21,23 @@ class ARModel(pl.LightningModule):
     # pylint: disable=arguments-differ
     # Disable to override args/kwargs from superclass
 
-    def __init__(self, args):
+    def __init__(self,lr, dataset, output_std, loss, step_length, n_example_pred):
         super().__init__()
         self.save_hyperparameters()
-        self.lr = args.lr
-
+        self.lr = lr
+        self.dataset = dataset
+        self.output_std = output_std
+        self.loss = loss
+        self.step_length = step_length
         # Load static features for grid/data
-        static_data_dict = utils.load_static_data(args.dataset)
+        static_data_dict = utils.load_static_data(self.dataset)
         for static_data_name, static_data_tensor in static_data_dict.items():
             self.register_buffer(
                 static_data_name, static_data_tensor, persistent=False
             )
 
         # Double grid output dim. to also output std.-dev.
-        self.output_std = bool(args.output_std)
+        self.output_std = bool(self.output_std)
         if self.output_std:
             self.grid_output_dim = (
                 2 * constants.GRID_STATE_DIM
@@ -66,14 +69,14 @@ class ARModel(pl.LightningModule):
         )
 
         # Instantiate loss function
-        self.loss = metrics.get_metric(args.loss)
+        self.loss = metrics.get_metric(self.loss)
 
         # Pre-compute interior mask for use in loss function
         self.register_buffer(
             "interior_mask", 1.0 - self.border_mask, persistent=False
         )  # (num_grid_nodes, 1), 1 for non-border
 
-        self.step_length = args.step_length  # Number of hours per pred. step
+        self.step_length = self.step_length  # Number of hours per pred. step
         self.val_metrics = {
             "rmse": [],
         }
@@ -88,7 +91,7 @@ class ARModel(pl.LightningModule):
         self.opt_state = None
 
         # For example plotting
-        self.n_example_pred = args.n_example_pred
+        self.n_example_pred = n_example_pred
         self.plotted_examples = 0
 
         # For storing spatial loss maps during evaluation
@@ -350,9 +353,9 @@ class ARModel(pl.LightningModule):
                 prediction.shape[0], self.n_example_pred - self.plotted_examples
             )
 
-            self.plot_examples(
-                batch, n_additional_examples, prediction=prediction
-            )
+            # self.plot_examples(
+            #     batch, n_additional_examples, prediction=prediction
+            # )
 
     def plot_examples(self, batch, n_examples, prediction=None):
         """
@@ -513,11 +516,11 @@ class ARModel(pl.LightningModule):
                     torch.mean(metric_tensor, dim=0) * self.data_std
                 )
                 # (pred_steps, d_f)
-                log_dict.update(
-                    self.create_metric_log_dict(
-                        metric_rescaled, prefix, metric_name
-                    )
-                )
+                # log_dict.update(
+                #     self.create_metric_log_dict(
+                #         metric_rescaled, prefix, metric_name
+                #     )
+                # )
 
         if self.trainer.is_global_zero and not self.trainer.sanity_checking:
             wandb.log(log_dict)  # Log all
@@ -551,22 +554,23 @@ class ARModel(pl.LightningModule):
                 )
             ]
 
-            # log all to same wandb key, sequentially
-            for fig in loss_map_figs:
-                wandb.log({"test_loss": wandb.Image(fig)})
+            # # log all to same wandb key, sequentially
+            # for fig in loss_map_figs:
+            #     wandb.log({"test_loss": wandb.Image(fig)})
 
             # also make without title and save as pdf
             pdf_loss_map_figs = [
                 vis.plot_spatial_error(loss_map, self.interior_mask[:, 0])
                 for loss_map in mean_spatial_loss
             ]
-            pdf_loss_maps_dir = os.path.join(wandb.run.dir, "spatial_loss_maps")
-            os.makedirs(pdf_loss_maps_dir, exist_ok=True)
-            for t_i, fig in zip(
-                constants.VAL_STEP_LOG_ERRORS, pdf_loss_map_figs
-            ):
-                fig.savefig(os.path.join(pdf_loss_maps_dir, f"loss_t{t_i}.pdf"))
+            # pdf_loss_maps_dir = os.path.join(wandb.run.dir, "spatial_loss_maps")
+            # # os.makedirs(pdf_loss_maps_dir, exist_ok=True)
+            # for t_i, fig in zip(
+            #     constants.VAL_STEP_LOG_ERRORS, pdf_loss_map_figs
+            # ):
+            #     fig.savefig(os.path.join(pdf_loss_maps_dir, f"loss_t{t_i}.pdf"))
             # save mean spatial loss as .pt file also
+            
             torch.save(
                 mean_spatial_loss.cpu(),
                 os.path.join(wandb.run.dir, "mean_spatial_loss.pt"),
