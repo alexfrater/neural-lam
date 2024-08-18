@@ -46,7 +46,7 @@ def load_static_data(dataset_name, device="cpu"):
         return torch.load(
             os.path.join(static_dir_path, fn), map_location=device
         )
-
+    print(static_dir_path)
     # Load border mask, 1. if node is part of border, else 0.
     border_mask_np = np.load(os.path.join(static_dir_path, "border_mask.npy"))
     border_mask = (
