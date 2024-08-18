@@ -44,6 +44,16 @@ class BaseGraphModel(ARModel):
         self.grid_embedder = utils.make_mlp(
             [self.grid_dim] + self.mlp_blueprint_end
         )
+
+
+
+        self.g2m_expander = utils.ExpandToBatch()
+        self.m2g_expander = utils.ExpandToBatch()
+        self.mesh_emb_expander = utils.ExpandToBatch()
+        # self.grid_features_expander = utils.ExpandToBatch()
+
+
+
         self.g2m_embedder = utils.make_mlp([g2m_dim] + self.mlp_blueprint_end)
         self.m2g_embedder = utils.make_mlp([m2g_dim] + self.mlp_blueprint_end)
 
@@ -56,7 +66,7 @@ class BaseGraphModel(ARModel):
             update_edges=False,
         )
         self.encoding_grid_mlp = utils.make_mlp(
-            [args.hidden_dim] + self.mlp_blueprint_end
+            [64] + self.mlp_blueprint_end
         )
 
         # decoder
@@ -69,7 +79,7 @@ class BaseGraphModel(ARModel):
 
         # Output mapping (hidden_dim -> output_dim)
         self.output_map = utils.make_mlp(
-            [args.hidden_dim] * (args.hidden_layers + 1)
+            [64] * (args.hidden_layers + 1)
             + [self.grid_output_dim],
             layer_norm=False,
         )  # No layer norm on this one
@@ -98,6 +108,7 @@ class BaseGraphModel(ARModel):
         """
         raise NotImplementedError("process_step not implemented")
 
+   
     def predict_step(
         self, prev_state, prev_prev_state, batch_static_features, forcing
     ):
@@ -122,24 +133,31 @@ class BaseGraphModel(ARModel):
             dim=-1,
         )
 
+        #Need these as inputs:
+        #grid_features,self.g2m_features,self.m2g_features
+
+    # def forward(grid_features,self.g2m_features,self.m2g_features)
+
+        
         # Embed all features
         grid_emb = self.grid_embedder(grid_features)  # (B, num_grid_nodes, d_h)
+
         g2m_emb = self.g2m_embedder(self.g2m_features)  # (M_g2m, d_h)
         m2g_emb = self.m2g_embedder(self.m2g_features)  # (M_m2g, d_h)
         mesh_emb = self.embedd_mesh_nodes()
 
         # Map from grid to mesh
-        mesh_emb_expanded = self.expand_to_batch(
+        mesh_emb_expanded = self.mesh_emb_expander(
             mesh_emb, batch_size
         )  # (B, num_mesh_nodes, d_h)
-        g2m_emb_expanded = self.expand_to_batch(g2m_emb, batch_size)
+        g2m_emb_expanded = self.g2m_expander(g2m_emb, batch_size)
 
         # This also splits representation into grid and mesh
         mesh_rep = self.g2m_gnn(
             grid_emb, mesh_emb_expanded, g2m_emb_expanded
         )  # (B, num_mesh_nodes, d_h)
         # Also MLP with residual for grid representation
-        grid_rep = grid_emb + self.encoding_grid_mlp(
+        grid_rep =  self.encoding_grid_mlp( #grid_emb + //TODO add identiy connection
             grid_emb
         )  # (B, num_grid_nodes, d_h)
 
@@ -147,7 +165,7 @@ class BaseGraphModel(ARModel):
         mesh_rep = self.process_step(mesh_rep)
 
         # Map back from mesh to grid
-        m2g_emb_expanded = self.expand_to_batch(m2g_emb, batch_size)
+        m2g_emb_expanded = self.m2g_expander(m2g_emb, batch_size)
         grid_rep = self.m2g_gnn(
             mesh_rep, grid_rep, m2g_emb_expanded
         )  # (B, num_grid_nodes, d_h)
@@ -176,3 +194,7 @@ class BaseGraphModel(ARModel):
 
         # Residual connection for full state
         return prev_state + rescaled_delta_mean, pred_std
+
+
+
+       

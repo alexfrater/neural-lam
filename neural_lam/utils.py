@@ -41,12 +41,11 @@ def load_static_data(dataset_name, device="cpu"):
     Load static files related to dataset
     """
     static_dir_path = os.path.join("data", dataset_name, "static")
-
     def loads_file(fn):
         return torch.load(
             os.path.join(static_dir_path, fn), map_location=device
         )
-    print(static_dir_path)
+
     # Load border mask, 1. if node is part of border, else 0.
     border_mask_np = np.load(os.path.join(static_dir_path, "border_mask.npy"))
     border_mask = (
@@ -248,6 +247,47 @@ def make_mlp(blueprint, layer_norm=True):
     return nn.Sequential(*layers)
 
 
+class ExpandToBatch(nn.Module):
+    def __init__(self, batch_size):
+        super(ExpandToBatch, self).__init__()
+        self.batch_size = batch_size
+
+    def forward(self, x):
+        expanded_size = (self.batch_size, *x.shape)
+        return x.unsqueeze(0).expand(expanded_size).clone()
+
+def make_mlp_batch(blueprint, batch_size=1, layer_norm=True):
+    """
+    Create MLP from list blueprint, with
+    input dimensionality: blueprint[0]
+    output dimensionality: blueprint[-1] and
+    hidden layers of dimensions: blueprint[1], ..., blueprint[-2]
+
+    Includes an initial expansion layer to ensure the tensor is expanded
+    and traced properly within the model.
+
+    if layer_norm is True, includes a LayerNorm layer at
+    the output (as used in GraphCast)
+    """
+    hidden_layers = len(blueprint) - 2
+    assert hidden_layers >= 0, "Invalid MLP blueprint"
+
+    layers = []
+
+    # Add the custom ExpandToBatch module to the MLP
+    layers.append(ExpandToBatch(batch_size))
+
+    for layer_i, (dim1, dim2) in enumerate(zip(blueprint[:-1], blueprint[1:])):
+        layers.append(nn.Linear(dim1, dim2))
+        if layer_i != hidden_layers:
+            layers.append(nn.SiLU())  # Swish activation
+
+    # Optionally add layer norm to output
+    if layer_norm:
+        layers.append(nn.LayerNorm(blueprint[-1]))
+
+    return nn.Sequential(*layers)
+
 def fractional_plot_bundle(fraction):
     """
     Get the tueplots bundle, but with figure width as a fraction of
@@ -271,3 +311,16 @@ def init_wandb_metrics(wandb_logger):
     experiment.define_metric("val_mean_loss", summary="min")
     for step in constants.VAL_STEP_LOG_ERRORS:
         experiment.define_metric(f"val_loss_unroll{step}", summary="min")
+
+
+class ExpandToBatch(torch.nn.Module):   
+    def __init__(self):
+        super().__init__()
+        
+    def forward(self, x, batch_size):
+        # Adjust dimensions for expand
+        expanded_size = (batch_size, *x.shape)
+        expanded = x.unsqueeze(0).expand(expanded_size).clone()
+        
+        # Replace the tensor in the container, maintaining reference consistency.
+        return expanded

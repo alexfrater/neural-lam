@@ -10,6 +10,9 @@ import wandb
 
 # First-party
 from neural_lam import constants, metrics, utils, vis
+import torch.nn as nn
+
+
 
 
 class ARModel(pl.LightningModule):
@@ -113,9 +116,15 @@ class ARModel(pl.LightningModule):
     @staticmethod
     def expand_to_batch(x, batch_size):
         """
-        Expand tensor with initial batch dimension
+        Expand tensor with initial batch dimension in place, ensuring compatibility with the number of dimensions.
         """
-        return x.unsqueeze(0).expand(batch_size, -1, -1)
+        # Adjust dimensions for expand
+        expanded_size = (batch_size, *x.shape)
+        expanded = x.unsqueeze(0).expand(expanded_size).clone()
+        
+        # Replace the tensor in the container, maintaining reference consistency.
+        return expanded
+
 
     def predict_step(
         self, prev_state, prev_prev_state, batch_static_features, forcing
@@ -180,6 +189,10 @@ class ARModel(pl.LightningModule):
             pred_std = self.per_var_std  # (d_f,)
 
         return prediction, pred_std
+
+
+
+
 
     def common_step(self, batch):
         """
