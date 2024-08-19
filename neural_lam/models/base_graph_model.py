@@ -147,9 +147,9 @@ class BaseGraphModel(ARModel):
         m2g_emb = self.m2g_embedder(self.m2g_features)  # (M_m2g, d_h)
         mesh_emb = self.embedd_mesh_nodes()
 
-        print("grid_emb",grid_emb.shape)
-        print("g2m_emb",g2m_emb.shape)
-        print("m2g_emb",m2g_emb.shape)
+        # print("grid_emb",grid_emb.shape)
+        # print("g2m_emb",g2m_emb.shape)
+        # print("m2g_emb",m2g_emb.shape)
         # Map from grid to mesh
         # mesh_emb_expanded = self.mesh_emb_expander(
         #     mesh_emb, batch_size

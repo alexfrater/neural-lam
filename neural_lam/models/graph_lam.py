@@ -18,7 +18,7 @@ class GraphLAM(BaseGraphModel):
 
     def __init__(self, args):
         super().__init__(args)
-
+        self.args = args
         assert (
             not self.hierarchical
         ), "GraphLAM does not use a hierarchical mesh graph"
@@ -127,7 +127,36 @@ class GraphLAM(BaseGraphModel):
         )
         #Not using batch sizes greater than 1 for ample
         grid_features = grid_features.squeeze(0)
+        def filter_edges(edge_index, num_nodes_to_keep):
+            # Create a mask that keeps only edges between nodes within the first 50 nodes
+            mask = (edge_index[0, :] < num_nodes_to_keep) & (edge_index[1, :] < num_nodes_to_keep)
+    
+            # Filter the edge index tensor using the mask
+            edge_index_filtered = edge_index[:, mask]
+            
+            return edge_index_filtered
+
+        print('m2g features',self.m2g_features)
+
+        if self.args.subset_ds:
+            num_nodes_to_keep = 50
+
+            self.m2m_features = self.m2m_features[:num_nodes_to_keep, :]
+            self.mesh_static_features = self.mesh_static_features[:num_nodes_to_keep, :]
+            self.m2g_features = self.m2g_features[:num_nodes_to_keep, :]
+            self.g2m_features = self.g2m_features[:num_nodes_to_keep, :]
+            grid_features = grid_features[:num_nodes_to_keep, :]
         
+            self.g2m_edge_index = filter_edges(self.g2m_edge_index, num_nodes_to_keep)
+            self.m2g_edge_index = filter_edges(self.m2g_edge_index, num_nodes_to_keep)
+
+        print('M2M Features:', self.m2m_features.shape)
+        print('Mesh Static Features:', self.mesh_static_features.shape)
+        print('M2G Features:', self.m2g_features.shape)
+        print('G2M Features:', self.g2m_features.shape)
+        print('Grid Features:', grid_features.shape)
+        print('G2M Edge Index:', self.g2m_edge_index.shape)
+        print('M2G Edge Index:', self.m2g_edge_index.shape)
         
         return [
             [self.m2m_features,
@@ -164,8 +193,7 @@ class GraphLAM(BaseGraphModel):
         # )  # (B, M_mesh, d_h)
    
         # mesh_rep= mesh_rep.squeeze(0)
-        print("m2m_emb",m2m_emb.shape)
-        print("mesh_rep",mesh_rep.shape)
+
         mesh_rep, _ = self.processor(
             mesh_rep, m2m_emb
         )  # (B, N_mesh, d_h)
