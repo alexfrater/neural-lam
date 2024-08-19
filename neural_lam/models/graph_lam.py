@@ -121,20 +121,31 @@ class GraphLAM(BaseGraphModel):
                 batch_static_features,
                 forcing,
                 self.expand_to_batch(self.grid_static_features, 1),
+                # self.grid_static_features,
             ),
             dim=-1,
         )
-
+        #Not using batch sizes greater than 1 for ample
+        grid_features = grid_features.squeeze(0)
 
         
-        return {
-        "grid_features": grid_features,
-        "g2m_features": self.g2m_features,
-        "edge_index1": self.g2m_edge_index,
-        "node_features2": self.mesh_static_features,
-        "edge_features2": self.m2g_features,
-        "edge_index2": self.m2g_edge_index
-        }
+        return [
+            [self.m2m_features,
+            self.mesh_static_features,
+            self.m2g_features,
+            self.g2m_features,
+            grid_features],
+            [self.g2m_edge_index,
+            self.m2g_edge_index]
+            ]
+        # {
+        # "grid_features": grid_features,
+        # "g2m_features": self.g2m_features,
+        # "edge_index1": self.g2m_edge_index,
+        # "node_features2": self.mesh_static_features,
+        # "edge_features2": self.m2g_features,
+        # "edge_index2": self.m2g_edge_index
+        # }
 
     
     def process_step(self, mesh_rep):
