@@ -132,7 +132,8 @@ class BaseGraphModel(ARModel):
             ),
             dim=-1,
         )
-
+        grid_features = grid_features.squeeze(0)
+        print("grid_features",grid_features.shape)
         #Need these as inputs:
         #grid_features,self.g2m_features,self.m2g_features
 
@@ -146,15 +147,18 @@ class BaseGraphModel(ARModel):
         m2g_emb = self.m2g_embedder(self.m2g_features)  # (M_m2g, d_h)
         mesh_emb = self.embedd_mesh_nodes()
 
+        print("grid_emb",grid_emb.shape)
+        print("g2m_emb",g2m_emb.shape)
+        print("m2g_emb",m2g_emb.shape)
         # Map from grid to mesh
-        mesh_emb_expanded = self.mesh_emb_expander(
-            mesh_emb, batch_size
-        )  # (B, num_mesh_nodes, d_h)
-        g2m_emb_expanded = self.g2m_expander(g2m_emb, batch_size)
+        # mesh_emb_expanded = self.mesh_emb_expander(
+        #     mesh_emb, batch_size
+        # )  # (B, num_mesh_nodes, d_h)
+        # g2m_emb_expanded = self.g2m_expander(g2m_emb, batch_size)
 
         # This also splits representation into grid and mesh
         mesh_rep = self.g2m_gnn(
-            grid_emb, mesh_emb_expanded, g2m_emb_expanded
+            grid_emb, mesh_emb, g2m_emb
         )  # (B, num_mesh_nodes, d_h)
         # Also MLP with residual for grid representation
         grid_rep =  self.encoding_grid_mlp( #grid_emb + //TODO add identiy connection
@@ -165,9 +169,9 @@ class BaseGraphModel(ARModel):
         mesh_rep = self.process_step(mesh_rep)
 
         # Map back from mesh to grid
-        m2g_emb_expanded = self.m2g_expander(m2g_emb, batch_size)
+        # m2g_emb = self.m2g_expander(m2g_emb, batch_size)
         grid_rep = self.m2g_gnn(
-            mesh_rep, grid_rep, m2g_emb_expanded
+            mesh_rep, grid_rep, m2g_emb
         )  # (B, num_grid_nodes, d_h)
 
         # Map to output dimension, only for grid

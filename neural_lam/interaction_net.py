@@ -97,6 +97,13 @@ class InteractionNet(pyg.nn.MessagePassing):
         (optionally) edge_rep: (M, d_h), updated vector representations
             of edges
         """
+        # send_rep = send_rep.unsqueeze(0)
+        # rec_rep = rec_rep.unsqueeze(0)
+        # edge_rep = edge_rep.unsqueeze(0)
+        # print("send_rep", send_rep.shape)
+        # print("rec_rep", rec_rep.shape)
+        # print("edge_rep", edge_rep.shape)
+        
         # Always concatenate to [rec_nodes, send_nodes] for propagation,
         # but only aggregate to rec_nodes
         node_reps = torch.cat((rec_rep, send_rep), dim=-2)
@@ -112,7 +119,7 @@ class InteractionNet(pyg.nn.MessagePassing):
             edge_rep = edge_rep + edge_diff
             return rec_rep, edge_rep
 
-        return rec_rep
+        return rec_rep.squeeze(0)
 
     def message(self, x_j, x_i, edge_attr):
         """

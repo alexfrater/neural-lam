@@ -127,7 +127,7 @@ class GraphLAM(BaseGraphModel):
         )
         #Not using batch sizes greater than 1 for ample
         grid_features = grid_features.squeeze(0)
-
+        
         
         return [
             [self.m2m_features,
@@ -159,10 +159,13 @@ class GraphLAM(BaseGraphModel):
         # Embed m2m here first
         batch_size = mesh_rep.shape[0]
         m2m_emb = self.m2m_embedder(self.m2m_features)  # (M_mesh, d_h)
-        m2m_emb = self.m2m_expander(
-            m2m_emb, batch_size
-        )  # (B, M_mesh, d_h)
-
+        # m2m_emb = self.m2m_expander(
+        #     m2m_emb, batch_size
+        # )  # (B, M_mesh, d_h)
+   
+        # mesh_rep= mesh_rep.squeeze(0)
+        print("m2m_emb",m2m_emb.shape)
+        print("mesh_rep",mesh_rep.shape)
         mesh_rep, _ = self.processor(
             mesh_rep, m2m_emb
         )  # (B, N_mesh, d_h)
