@@ -136,8 +136,99 @@ class GraphLAM(BaseGraphModel):
             
             return edge_index_filtered
 
-        print('m2g features',self.m2g_features)
+            
 
+        def remap_and_filter_edges(edge_index, num_nodes_to_keep):
+            # Flatten the edge_index and find the first `num_nodes_to_keep` unique nodes
+
+            edge_index[0] = edge_index[0] - edge_index[0][0] #Src Nodes
+
+            flat_edge_index = edge_index.view(-1)
+            unique_nodes = torch.unique(flat_edge_index, sorted=False)[:num_nodes_to_keep]
+
+            # Create a mapping from the old node indices to the new indices starting at 0
+            node_mapping = torch.full((flat_edge_index.max() + 1,), -1, dtype=torch.long)
+            node_mapping[unique_nodes] = torch.arange(len(unique_nodes))
+
+            # Apply the mapping to the edge index
+            remapped_src = node_mapping[edge_index[0]]
+            remapped_dst = node_mapping[edge_index[1]]
+
+            # Filter out any invalid edges (those with -1 after mapping)
+            valid_mask = (remapped_src >= 0) & (remapped_dst >= 0)
+            filtered_edge_index = torch.stack([remapped_src[valid_mask], remapped_dst[valid_mask]], dim=0)
+
+            return filtered_edge_index
+
+
+
+# Filter and remap the edge index tensor
+       
+        def remap_and_filter_edges3(edge_index, num_nodes_to_keep):
+            # Extract unique nodes while preserving the order they appear in the edge index
+            unique_nodes = []
+            for node in edge_index.view(-1).tolist():
+                if node not in unique_nodes:
+                    unique_nodes.append(node)
+            
+            # Filter unique nodes to only keep those less than num_nodes_to_keep
+            valid_nodes = [node for node in unique_nodes if node < num_nodes_to_keep]
+
+            # Create a mapping from the original node indices to a new index starting from 0
+            node_mapping = {old_idx: new_idx for new_idx, old_idx in enumerate(valid_nodes)}
+
+            # Initialize a list to store the remapped edges
+            filtered_edges = []
+
+            for i in range(edge_index.shape[1]):
+                src, dst = edge_index[:, i]
+                # Check if both source and destination nodes are in the valid nodes
+                if src.item() in node_mapping and dst.item() in node_mapping:
+                    # Remap the nodes to new indices
+                    new_src = node_mapping[src.item()]
+                    new_dst = node_mapping[dst.item()]
+                    filtered_edges.append([new_src, new_dst])
+
+            if filtered_edges:
+                filtered_edge_index = torch.tensor(filtered_edges).t()
+            else:
+                filtered_edge_index = torch.tensor([], dtype=torch.long).view(2, 0)
+
+            return filtered_edge_index
+
+# Filter and remap the edge index tensor
+        def remap_and_filter_edges2(edge_index, num_nodes_to_keep):
+            # Find unique nodes in the edge index
+            unique_nodes = torch.unique(edge_index)
+
+            # Filter unique nodes to only keep those less than num_nodes_to_keep
+            valid_nodes = unique_nodes[unique_nodes < num_nodes_to_keep]
+
+            # Create a mapping from old node indices to new compacted indices
+            node_mapping = {old_idx.item(): new_idx for new_idx, old_idx in enumerate(valid_nodes)}
+
+            # Initialize a list to store valid edges
+            filtered_edges = []
+
+            for i in range(edge_index.shape[1]):
+                src, dst = edge_index[:, i]
+                # Check if both source and destination nodes are in the valid nodes
+                if src.item() in node_mapping and dst.item() in node_mapping:
+                    # Remap the nodes to new indices
+                    new_src = node_mapping[src.item()]
+                    new_dst = node_mapping[dst.item()]
+                    filtered_edges.append([new_src, new_dst])
+
+            if filtered_edges:
+                filtered_edge_index = torch.tensor(filtered_edges).t()
+            else:
+                filtered_edge_index = torch.tensor([], dtype=torch.long).view(2, 0)
+
+            return filtered_edge_index
+
+        print('m2g features',self.m2g_features)
+        print('G2M Edge Index:', self.g2m_edge_index.shape)
+        print('G2M Edge Index:', self.g2m_edge_index)
         if self.args.subset_ds:
             num_nodes_to_keep = 50
 
@@ -146,27 +237,50 @@ class GraphLAM(BaseGraphModel):
             self.m2g_features = self.m2g_features[:num_nodes_to_keep, :]
             self.g2m_features = self.g2m_features[:num_nodes_to_keep, :]
             grid_features = grid_features[:num_nodes_to_keep, :]
-        
-            self.g2m_edge_index = filter_edges(self.g2m_edge_index, num_nodes_to_keep)
-            self.m2g_edge_index = filter_edges(self.m2g_edge_index, num_nodes_to_keep)
+            print('m2g features',self.m2g_features)
+            print('self.g2m_edge_index',self.g2m_edge_index)
+            self.g2m_edge_index = remap_and_filter_edges(self.g2m_edge_index, num_nodes_to_keep)
+            self.m2m_edge_index = remap_and_filter_edges(self.m2m_edge_index, num_nodes_to_keep)
+
+            self.m2g_edge_index = remap_and_filter_edges(self.m2g_edge_index, num_nodes_to_keep)
 
         print('M2M Features:', self.m2m_features.shape)
         print('Mesh Static Features:', self.mesh_static_features.shape)
         print('M2G Features:', self.m2g_features.shape)
         print('G2M Features:', self.g2m_features.shape)
         print('Grid Features:', grid_features.shape)
-        print('G2M Edge Index:', self.g2m_edge_index.shape)
-        print('M2G Edge Index:', self.m2g_edge_index.shape)
         
-        return [
-            [self.m2m_features,
-            self.mesh_static_features,
-            self.m2g_features,
-            self.g2m_features,
-            grid_features],
-            [self.g2m_edge_index,
-            self.m2g_edge_index]
-            ]
+        print('G2M Edge Index:', self.g2m_edge_index.shape)
+        print('G2M Edge Index:', self.g2m_edge_index)
+
+        print('M2G Edge Index:', self.m2g_edge_index.shape)
+
+        # return [
+            # [{'m2m_features':self.m2m_features},
+            # {'mesh_static_features' :self.mesh_static_features} ,
+            # self.m2g_features,
+            # self.g2m_features,
+            # grid_features],
+            # [self.g2m_edge_index,
+            # self.m2m_edge_index
+            # self.m2g_edge_index]
+            # ]
+
+        return [ #TODO change names to features and edges
+        [
+            {'m2m_features': self.m2m_features},
+            {'mesh_static_features': self.mesh_static_features},
+            {'m2g_features': self.m2g_features},
+            {'g2m_features': self.g2m_features},
+            {'grid_features': grid_features}
+        ],
+        [
+            {'m2m_edge_index':self.m2g_edge_index},
+            {'m2g_edge_index':self.m2m_edge_index},
+            {'g2m_edge_index':self.g2m_edge_index}
+        ]            
+
+    ]
         # {
         # "grid_features": grid_features,
         # "g2m_features": self.g2m_features,
